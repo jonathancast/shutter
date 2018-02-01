@@ -29,6 +29,8 @@ package Shutter::Draw::DrawingTool;
 use utf8;
 use strict;
 use warnings;
+use 5.10.1;
+use Path::Tiny;
 
 use Gtk2;
 
@@ -6484,8 +6486,8 @@ sub import_from_dnd {
         foreach (@valid_files) {
 
             #transform uri to path
-            my $new_uri  = Gnome2::VFS::URI->new( $self->utf8_decode( Gnome2::VFS->unescape_string($_) ) );
-            my $new_file = $self->utf8_decode( Gnome2::VFS->unescape_string( $new_uri->get_path ) );
+            my $new_uri  = path( $self->utf8_decode( Gnome2::VFS->unescape_string($_) ) );
+            my $new_file = $self->utf8_decode( Gnome2::VFS->unescape_string( $new_uri->stringify ) );
 
             $self->{_current_pixbuf} = $self->{_lp}->load( $new_file, undef, undef, undef, TRUE );
             if ( $self->{_current_pixbuf} ) {
@@ -6942,7 +6944,7 @@ sub gen_thumbnail_on_idle {
                 if ( exists $child->{'uri'} ) {
                     my $thumb;
                     unless ( $child->{'no_thumbnail'} ) {
-                        $thumb = $self->{_thumbs}->get_thumbnail( $child->{'uri'}->to_string, $child->{'mime_type'}, $child->{'mtime'}, 0.2 );
+                        $thumb = $self->{_thumbs}->get_thumbnail( $child->{'uri'}, $child->{'mime_type'}, $child->{'mtime'}, 0.2 );
                     }
                     else {
                         $thumb = Gtk2::Gdk::Pixbuf->new( 'rgb', TRUE, 8, 5, 5 );

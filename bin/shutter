@@ -29,6 +29,8 @@
 use utf8;
 use strict;
 use warnings;
+use 5.10.1;
+use Carp;
 
 #Deal with encoding problem
 use Encode;
@@ -37,6 +39,8 @@ use Encode;
 use Gnome2;
 use Gnome2::Wnck;
 use Gnome2::VFS '-init';
+
+use Path::Tiny;
 
 #Use AuthenticationManager to handle user credentials easily
 Gnome2::AuthenticationManager->init;
@@ -4105,50 +4109,59 @@ else {
 
         #check parameters
         return FALSE unless $uri;
+
+        if ($uri->isa("Gnome2::VFS::URI")) {
+            carp "fct_integrate_screenshot_in_notebook called with VFS object";
+            my @str = split /:/, $uri->to_string ;
+            $uri = path($str[1]);
+            say "converted uri $uri";
+        }
+
         unless ( $uri->exists ) {
-            &fct_show_status_message( 1, $uri->get_path . " " . $d->get("not found") );
+            &fct_show_status_message( 1, $uri . " " . $d->get("not found") );
             return FALSE;
         }
 
         #check mime type
-        my $mime_type = Gnome2::VFS->get_mime_type_for_name( $uri->to_string );
+        my $mime_type = Gnome2::VFS->get_mime_type_for_name( $uri->stringify );
+        say "mime: $mime_type";
         $mime_type =~ s/image\/x\-apple\-ios\-png/image\/png/; #FIXME
         if ( $mime_type =~ m/(pdf|ps|svg)/ig ) {
 
             #not a supported mime type
             #~ my $response = $sd->dlg_error_message(
-            #~ sprintf ( $d->get(  "Error while opening image %s." ), "'" . $uri->to_string . "'" ) ,
+            #~ sprintf ( $d->get(  "Error while opening image %s." ), "'" . $uri->stringify . "'" ) ,
             #~ $d->get( "There was an error opening the image." ),
             #~ undef, undef, undef,
             #~ undef, undef, undef,
             #~ $d->get( "MimeType not supported." )
             #~ );
-            #~ &fct_show_status_message( 1, $uri->to_string . " " . $d->get("not supported") );
+            #~ &fct_show_status_message( 1, $uri->stringify . " " . $d->get("not supported") );
             return FALSE;
         }
 
-        #~ my $mime_type = Gnome2::VFS->get_mime_type_for_name( $uri->to_string );
+        #~ my $mime_type = Gnome2::VFS->get_mime_type_for_name( $uri->stringify );
         #~ unless ($mime_type && &fct_check_valid_mime_type($mime_type)){
         #~ #not a supported mime type
         #~ my $response = $sd->dlg_error_message(
-        #~ sprintf ( $d->get(  "Error while opening image %s." ), "'" . $uri->to_string . "'" ) ,
+        #~ sprintf ( $d->get(  "Error while opening image %s." ), "'" . $uri->stringify . "'" ) ,
         #~ $d->get( "There was an error opening the image." ),
         #~ undef, undef, undef,
         #~ undef, undef, undef,
         #~ $d->get( "MimeType not supported." )
         #~ );
-        #~ &fct_show_status_message( 1, $uri->to_string . " " . $d->get("not supported") );
+        #~ &fct_show_status_message( 1, $uri->stringify . " " . $d->get("not supported") );
         #~ return FALSE;
         #~ }
 
         #add to recentmanager
-        Gtk2::RecentManager->get_default->add_item( $uri->to_string );
+        Gtk2::RecentManager->get_default->add_item( $uri->stringify );
 
         #FIXME
         my $num_files = $session_start_screen{'first_page'}->{'num_session_files'};
 
         #append a page to notebook using with label == filename
-        my $fname = $shf->utf8_decode( Gnome2::VFS->unescape_string_for_display( $uri->extract_short_name ) );
+        my $fname = $shf->utf8_decode( Gnome2::VFS->unescape_string_for_display( $uri->basename ) );
         my $key   = 0;
         my $indx  = 0;
         if ( defined $num_files && $num_files > 0 ) {
@@ -4177,7 +4190,7 @@ else {
 
         $key = "[" . $indx . "] - $fname";
 
-        #~ print $key, "-", $uri->to_string, "\n";
+        print $key, "-", $uri->stringify, "\n";
 
         #store the history object
         if ( defined $history && $history->get_history ) {
@@ -4274,7 +4287,7 @@ else {
         my $result;
         if ( defined $session_screens{$key}->{'uri'} ) {
             ( $result, $session_screens{$key}->{'handle'} ) = Gnome2::VFS::Monitor->add(
-                $session_screens{$key}->{'uri'}->to_string,
+                $session_screens{$key}->{'uri'}->stringify,
                 'file',
                 sub {
                     my $handle = shift;
@@ -4298,7 +4311,7 @@ else {
                     }
                     elsif ( $event eq 'changed' ) {
 
-                        print $session_screens{$key}->{'uri'}->to_string . " - " . $event . "\n"
+                        print $session_screens{$key}->{'uri'}->stringify . " - " . $event . "\n"
                           if $sc->get_debug;
                         $session_screens{$key}->{'changed'} = TRUE;
                         &fct_update_tab($key);
@@ -4553,7 +4566,7 @@ else {
                     if ( exists $session_screens{$key}->{'uri'}
                         && defined $session_screens{$key}->{'uri'} )
                     {
-                        $data->set( $data->target, 8, $session_screens{$key}->{'uri'}->to_string );
+                        $data->set( $data->target, 8, $session_screens{$key}->{'uri'}->stringify );
                     }
                 }
             );
@@ -4647,7 +4660,7 @@ else {
                                 if ( exists $session_screens{$key}->{'uri'}
                                     && defined $session_screens{$key}->{'uri'} )
                                 {
-                                    $target_list .= $session_screens{$key}->{'uri'}->to_string . "\n";
+                                    $target_list .= $session_screens{$key}->{'uri'}->stringify . "\n";
                                 }
                             }
                         }
@@ -5301,7 +5314,7 @@ else {
 
         foreach my $file (@new_files) {
 
-            my $new_uri = Gnome2::VFS::URI->new( $shf->utf8_decode( Gnome2::VFS->unescape_string($file) ) );
+            my $new_uri = path( $shf->utf8_decode( Gnome2::VFS->unescape_string($file) ) );
 
             next if &fct_is_uri_in_session( $new_uri, TRUE );
 
@@ -5330,7 +5343,7 @@ else {
 
         foreach my $key ( keys %session_screens ) {
             if ( exists $session_screens{$key}->{'uri'} ) {
-                if ( $uri->equal( $session_screens{$key}->{'uri'} ) ) {
+                if ( $uri eq  $session_screens{$key}->{'uri'} ) {
                     if ( exists $session_screens{$key}->{'tab_child'} ) {
                         if ($jump) {
                             $notebook->set_current_page( $notebook->page_num( $session_screens{$key}->{'tab_child'} ) );
@@ -5406,12 +5419,12 @@ else {
                 &fct_update_gui;
 
                 #do the real work
-                my $new_uri = Gnome2::VFS::URI->new( ${$session_xml}{$key}{'filename'} );
+                my $new_uri = path( ${$session_xml}{$key}{'filename'} );
                 if ( &fct_integrate_screenshot_in_notebook( $new_uri, undef, undef, $count ) ) {
-                    &fct_show_status_message( 1, $new_uri->get_path . " " . $d->get("opened") );
+                    &fct_show_status_message( 1, $new_uri->stringify . " " . $d->get("opened") );
                 }
                 else {
-                    &fct_show_status_message( 1, sprintf( $d->get("Error while opening image %s."), "'" . $new_uri->extract_short_name . "'" ) );
+                    &fct_show_status_message( 1, sprintf( $d->get("Error while opening image %s."), "'" . $new_uri->basename . "'" ) );
                 }
 
             }
@@ -5451,7 +5464,7 @@ else {
         }
 
         #find trash directory
-        my $trash_uri = Gnome2::VFS->find_directory( Gnome2::VFS::URI->new( $ENV{'HOME'} ), 'trash', TRUE, TRUE, 755 );
+        my $trash_uri = Gnome2::VFS->find_directory( path( $ENV{'HOME'} ), 'trash', TRUE, TRUE, 755 );
 
         #create a trashinfo file to enable restoring (a tempfile first)
         my $trashinfo_path = $strash->create_trashinfo_file( Gnome2::VFS->escape_path_string( $session_screens{$key}->{'long'} ) );
@@ -5475,7 +5488,7 @@ else {
             }
 
             #move trashinfo file
-            my $result = Gnome2::VFS::Xfer->uri( Gnome2::VFS::URI->new($trashinfo_path), $trashinfo_uri, 'default', 'abort', 'replace', sub { return TRUE } );
+            my $result = Gnome2::VFS::Xfer->uri( path($trashinfo_path), $trashinfo_uri, 'default', 'abort', 'replace', sub { return TRUE } );
             unless ( $result eq 'ok' ) {
                 print "WARNING: ", sprintf( $d->get("Error while creating the trashinfo file %s."), "'" . $trashinfo_filename . "'" ), "\n";
 
@@ -5522,7 +5535,7 @@ else {
                 eval {
 
                     #remove from recentmanager
-                    Gtk2::RecentManager->get_default->remove_item( $session_screens{$key}->{'uri'}->to_string );
+                    Gtk2::RecentManager->get_default->remove_item( $session_screens{$key}->{'uri'}->stringify );
                 };
             }
 
@@ -5585,7 +5598,7 @@ else {
                             eval {
 
                                 #remove from recentmanager
-                                Gtk2::RecentManager->get_default->remove_item( $session_screens{$key}->{'uri'}->to_string );
+                                Gtk2::RecentManager->get_default->remove_item( $session_screens{$key}->{'uri'}->stringify );
                             };
                         }
 
@@ -5764,7 +5777,7 @@ else {
 
             #save pixbuf to tempfile and integrate it
             if ( $sp->save_pixbuf_to_file( $image, $tmpfilename, $filetype_value ) ) {
-                my $new_key = &fct_integrate_screenshot_in_notebook( Gnome2::VFS::URI->new($tmpfilename), $image );
+                my $new_key = &fct_integrate_screenshot_in_notebook( path($tmpfilename), $image );
             }
 
         }
@@ -6225,7 +6238,7 @@ else {
             }
 
             #...and create an uri
-            $uri = Gnome2::VFS::URI->new($tmp_filename);
+            $uri = path($tmp_filename);
         }
         else {
 
@@ -6576,7 +6589,7 @@ else {
 
             #we have to use the path (e.g. /home/username/file1.png)
             #so we can save the screenshot_properly
-            $screenshot_name = $shf->utf8_decode( Gnome2::VFS->unescape_string( $uri->get_path ) );
+            $screenshot_name = $shf->utf8_decode( Gnome2::VFS->unescape_string( $uri->stringify ) );
 
             #maybe / is set as uri (get_path returns undef)
             #in this case nothing is returned when using get_path
@@ -6624,14 +6637,14 @@ else {
               if $sc->get_debug;
 
             #update uri after parsing as well, so we can check if file exists for example
-            $uri = Gnome2::VFS::URI->new($screenshot_name);
+            $uri = path($screenshot_name);
 
             #maybe the uri already exists, so we have to append some digits (e.g. testfile01(0002).png)
             #don't check if filename is set via cmd parameter
             unless ( $sc->get_export_filename ) {
                 if ( $uri->exists ) {
                     my $count = 1;
-                    my $new_filename = fileparse( $shf->utf8_decode( Gnome2::VFS->unescape_string( $uri->get_path ) ), qr/\.[^.]*/ );
+                    my $new_filename = fileparse( $shf->utf8_decode( Gnome2::VFS->unescape_string( $uri->stringify ) ), qr/\.[^.]*/ );
 
                     print "Checking if filename already exists: " . $new_filename . "\n"
                       if $sc->get_debug;
@@ -6639,16 +6652,16 @@ else {
                     my $existing_filename = $new_filename;
                     while ( $uri->exists ) {
                         $new_filename = $existing_filename . "(" . sprintf( "%03d", $count++ ) . ")";
-                        $uri          = Gnome2::VFS::URI->new($folder);
+                        $uri          = path($folder);
                         $uri          = $uri->append_string("$new_filename.$filetype_value");
-                        print "Checking new uri after parsing: " . $uri->to_string . "\n"
+                        print "Checking new uri after parsing: $uri\n"
                           if $sc->get_debug;
                     }
                 }
             }
 
             #we have to update the path again
-            $screenshot_name = $shf->utf8_decode( Gnome2::VFS->unescape_string( $uri->get_path ) );
+            $screenshot_name = $shf->utf8_decode( Gnome2::VFS->unescape_string( $uri->stringify ) );
 
             #no valid filename was determined, exit here
             unless ($screenshot_name) {
@@ -6657,7 +6670,7 @@ else {
                 return FALSE;
             }
 
-            print "New uri after exists check: " . $uri->to_string . "\n"
+            print "New uri after exists check: $uri\n"
               if $sc->get_debug;
 
             #manipulate before saving
@@ -6686,7 +6699,7 @@ else {
                     else {
 
                         #update uri after saving, so we can check if file exists for example
-                        $uri = Gnome2::VFS::URI->new($screenshot_name);
+                        $uri = path($screenshot_name);
                     }
                 }
                 else {
@@ -6771,7 +6784,7 @@ else {
                     $new_key_screenshot = &fct_integrate_screenshot_in_notebook( $uri, $screenshot, $screenshooter );
 
                     #thumbnail as well if present
-                    $new_key_screenshot_thumbnail = &fct_integrate_screenshot_in_notebook( Gnome2::VFS::URI->new($screenshot_thumbnail_name), $screenshot_thumbnail )
+                    $new_key_screenshot_thumbnail = &fct_integrate_screenshot_in_notebook( path($screenshot_thumbnail_name), $screenshot_thumbnail )
                       if $thumbnail_active->get_active;
 
                 }
@@ -7087,7 +7100,7 @@ else {
 
                 #everything is fine -> open it
                 if ( $app->supports_uris ) {
-                    $app->launch( $session_screens{$key}->{'uri'}->to_string );
+                    $app->launch( $session_screens{$key}->{'uri'}->stringify );
                 }
                 else {
                     $app->launch( $session_screens{$key}->{'long'} );
@@ -7107,7 +7120,7 @@ else {
                     if ( defined $iter ) {
                         my $key = $session_start_screen{'first_page'}->{'model'}->get_value( $iter, 2 );
                         if ( $app->supports_uris ) {
-                            push @open_files, $session_screens{$key}->{'uri'}->to_string;
+                            push @open_files, $session_screens{$key}->{'uri'}->stringify;
                         }
                         else {
                             push @open_files, $session_screens{$key}->{'long'};
@@ -7559,13 +7572,13 @@ else {
         my $error_counter = 0;
         while ( $error_counter <= MAX_ERROR ) {
 
-            my $fileinfo = $session_screens{$key}->{'uri'}->get_file_info('default');
+            my $fileinfo = $session_screens{$key}->{'uri'}->stat;
 
             #does the file exist?
             if ( $session_screens{$key}->{'uri'}->exists ) {
 
                 #maybe we need no update
-                if ( $fileinfo->{'mtime'} == $session_screens{$key}->{'mtime'}
+                if ( $fileinfo->mtime == $session_screens{$key}->{'mtime'}
                     && !$uri )
                 {
                     print "Updating fileinfos REJECTED for key: $key (not modified)\n"
@@ -7577,12 +7590,12 @@ else {
 
                 #FILEINFO
                 #--------------------------------------
-                $session_screens{$key}->{'mtime'} = $fileinfo->{'mtime'};
-                $session_screens{$key}->{'size'}  = $fileinfo->{'size'};
+                $session_screens{$key}->{'mtime'} = $fileinfo->mtime;
+                $session_screens{$key}->{'size'}  = $fileinfo->size;
 
-                $session_screens{$key}->{'short'}    = $shf->utf8_decode( Gnome2::VFS->unescape_string( $session_screens{$key}->{'uri'}->extract_short_name ) );
-                $session_screens{$key}->{'long'}     = $shf->utf8_decode( Gnome2::VFS->unescape_string( $session_screens{$key}->{'uri'}->get_path ) );
-                $session_screens{$key}->{'folder'}   = $shf->utf8_decode( Gnome2::VFS->unescape_string( $session_screens{$key}->{'uri'}->extract_dirname ) );
+                $session_screens{$key}->{'short'}    = $shf->utf8_decode( Gnome2::VFS->unescape_string( $session_screens{$key}->{'uri'}->basename ) );
+                $session_screens{$key}->{'long'}     = $shf->utf8_decode( Gnome2::VFS->unescape_string( $session_screens{$key}->{'uri'}->stringify ) );
+                $session_screens{$key}->{'folder'}   = $shf->utf8_decode( Gnome2::VFS->unescape_string( $session_screens{$key}->{'uri'}->parent->basename ) );
                 $session_screens{$key}->{'filetype'} = $session_screens{$key}->{'short'};
                 $session_screens{$key}->{'filetype'} =~ s/.*\.//ig;
 
@@ -7591,8 +7604,9 @@ else {
                 $session_screens{$key}->{'name'} =~ s/\.$session_screens{$key}->{'filetype'}//g;
 
                 #mime type
-                my $mime_type = Gnome2::VFS->get_mime_type_for_name( $session_screens{$key}->{'uri'}->to_string );
+                my $mime_type = Gnome2::VFS->get_mime_type_for_name( $session_screens{$key}->{'uri'}->stringify );
 				$mime_type =~ s/image\/x\-apple\-ios\-png/image\/png/; #FIXME
+                say "2nd mime type: $mime_type";
 				$session_screens{$key}->{'mime_type'} = $mime_type;
 
 				#THUMBNAIL
@@ -7710,7 +7724,7 @@ else {
                 unless ( $session_screens{$key}->{'no_thumbnail'} ) {
 
                     #update tab icon
-                    $thumb = $sthumb->get_thumbnail( $session_screens{$key}->{'uri'}->to_string, $session_screens{$key}->{'mime_type'}, $session_screens{$key}->{'mtime'}, 0.2, $force_thumb );
+                    $thumb = $sthumb->get_thumbnail( $session_screens{$key}->{'uri'}, $session_screens{$key}->{'mime_type'}, $session_screens{$key}->{'mtime'}, 0.2, $force_thumb );
                     $session_screens{$key}->{'tab_icon'}->set_from_pixbuf($thumb);
                 }
 
@@ -7721,7 +7735,7 @@ else {
                 unless ( $session_screens{$key}->{'no_thumbnail'} ) {
 
                     #update view icon
-                    $thumb_view = $sthumb->get_thumbnail( $session_screens{$key}->{'uri'}->to_string, $session_screens{$key}->{'mime_type'}, $session_screens{$key}->{'mtime'}, 1.0 );
+                    $thumb_view = $sthumb->get_thumbnail( $session_screens{$key}->{'uri'}, $session_screens{$key}->{'mime_type'}, $session_screens{$key}->{'mtime'}, 1.0 );
 
                     #update dnd pixbuf
                     $session_screens{$key}->{'image'}->drag_source_set_icon_pixbuf($thumb_view);
@@ -7892,7 +7906,7 @@ else {
 
                     if ( $sp->save_pixbuf_to_file( $pixbuf, $new_filename, $session_screens{$key}->{'filetype'} ) ) {
 
-                        if ( &fct_update_tab( $key, undef, Gnome2::VFS::URI->new($new_filename), FALSE, 'clear' ) ) {
+                        if ( &fct_update_tab( $key, undef, path($new_filename), FALSE, 'clear' ) ) {
 
                             #setup a new filemonitor, so we get noticed if the file changed
                             &fct_add_file_monitor($key);
@@ -8166,13 +8180,13 @@ else {
         }
 
         #create new uri
-        my $new_uri = Gnome2::VFS::URI->new("$folder/$filename_value.$filetype_value");
+        my $new_uri = path("$folder/$filename_value.$filetype_value");
         if ( $new_uri->exists ) {
             my $count             = 1;
             my $existing_filename = $filename_value;
             while ( $new_uri->exists ) {
                 $filename_value = $existing_filename . "(" . sprintf( "%03d", $count++ ) . ")";
-                $new_uri        = Gnome2::VFS::URI->new($folder);
+                $new_uri        = path($folder);
                 $new_uri        = $new_uri->append_string("$filename_value.$filetype_value");
                 print "Checking new uri: " . $new_uri->to_string . "\n"
                   if $sc->get_debug;
@@ -9589,7 +9603,7 @@ else {
                 $new_name = $session_screens{$key}->{'folder'} . "/" . $new_name . "." . $session_screens{$key}->{'filetype'};
 
                 #create uris for following action (e.g. update tab, move etc.)
-                my $new_uri = Gnome2::VFS::URI->new($new_name);
+                my $new_uri = path($new_name);
                 my $old_uri = $session_screens{$key}->{'uri'};
 
                 if ($new_uri) {
@@ -10058,7 +10072,7 @@ else {
 
                                 $session_screens{$key}->{'handle'}->cancel;
                             }
-                            if ( &fct_update_tab( $key, undef, Gnome2::VFS::URI->new($filename), FALSE, 'clear' ) ) {
+                            if ( &fct_update_tab( $key, undef, path($filename), FALSE, 'clear' ) ) {
 
                                 #setup a new filemonitor, so we get noticed if the file changed
                                 &fct_add_file_monitor($key);
@@ -10123,7 +10137,7 @@ else {
                                     $session_screens{$key}->{'handle'}->cancel;
                                 }
 
-                                if ( &fct_update_tab( $key, undef, Gnome2::VFS::URI->new($filename), FALSE, 'clear' ) ) {
+                                if ( &fct_update_tab( $key, undef, path($filename), FALSE, 'clear' ) ) {
 
                                     #setup a new filemonitor, so we get noticed if the file changed
                                     &fct_add_file_monitor($key);
@@ -10757,7 +10771,7 @@ else {
 
                             #copy website url to clipboard
                             if ( $ftp_wurl_entry_dlg->get_text ) {
-                                my $wuri = Gnome2::VFS::URI->new( $ftp_wurl_entry_dlg->get_text );
+                                my $wuri = path( $ftp_wurl_entry_dlg->get_text );
 
                                 my ( $short, $folder, $ext ) = fileparse( $file, qr/\.[^.]*/ );
                                 $wuri = $wuri->append_file_name( $short . $ext );
@@ -10819,9 +10833,9 @@ else {
                         #update gui
                         &fct_update_gui;
 
-                        my $source_uri = Gnome2::VFS::URI->new($file);
+                        my $source_uri = path($file);
 
-                        my $target_uri = Gnome2::VFS::URI->new( $places_fc->get_uri );
+                        my $target_uri = path( $places_fc->get_uri );
                         $target_uri = $target_uri->append_file_name( $source_uri->extract_short_name );
 
                         #~ print sprintf("%s und %s \n", $target_uri->to_string, $source_uri->to_string);

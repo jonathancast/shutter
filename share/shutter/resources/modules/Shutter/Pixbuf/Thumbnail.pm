@@ -53,12 +53,13 @@ sub new {
 
 sub get_thumbnail {
 	my $self 		= shift;
-	my $text_uri 	= shift;
+	my $path    	= shift;
 	my $mime_type 	= shift;
 	my $mtime 		= shift;
 	my $rfactor 	= shift;
 	my $force_new 	= shift;
-	
+
+    my $text_uri = "file:$path";
 	my $pixbuf;
 	my $factory = Gnome2::ThumbnailFactory->new ('normal');
 	if($factory->can_thumbnail($text_uri, $mime_type, $mtime)){
