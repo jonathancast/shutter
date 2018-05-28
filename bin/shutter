@@ -7632,7 +7632,7 @@ else {
                 $session_screens{$key}->{'name'} =~ s/\.$session_screens{$key}->{'filetype'}//g;
 
                 #mime type
-                my ($mime_type) = $mime_detect->mime_type( $session_screens{$key}->{'uri'}->get_path )->mime_type;
+                my $mime_type = get_mime_type( $session_screens{$key}->{'uri'} );
                 $mime_type =~ s/image\/x\-apple\-ios\-png/image\/png/; #FIXME
                 $session_screens{$key}->{'mime_type'} = $mime_type;
 
@@ -11212,6 +11212,13 @@ else {
                 $child->hide_all;
             }
         }
+    }
+
+    sub get_mime_type {
+        my ($uri) = @_;
+
+        my $mt = $mime_detect->mime_type( $uri->get_path );
+        return $mt && $mt->mime_type;
     }
 
     #--------------------------------------
