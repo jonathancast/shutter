@@ -7633,10 +7633,10 @@ else {
 
                 #mime type
                 my ($mime_type) = $mime_detect->mime_type( $session_screens{$key}->{'uri'}->get_path )->mime_type;
-				$mime_type =~ s/image\/x\-apple\-ios\-png/image\/png/; #FIXME
-				$session_screens{$key}->{'mime_type'} = $mime_type;
+                $mime_type =~ s/image\/x\-apple\-ios\-png/image\/png/; #FIXME
+                $session_screens{$key}->{'mime_type'} = $mime_type;
 
-				#THUMBNAIL
+                #THUMBNAIL
                 #--------------------------------------
                 #maybe we have a pixbuf already (e.g. after taking a screenshot)
                 unless ($pixbuf) {
