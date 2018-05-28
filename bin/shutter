@@ -4153,7 +4153,7 @@ else {
         }
 
         #check mime type
-        my $mime_type = Gnome2::VFS->get_mime_type_for_name( $uri->get_path );
+        my $mime_type = get_mime_type( $uri );
         $mime_type =~ s/image\/x\-apple\-ios\-png/image\/png/; #FIXME
         if ( $mime_type =~ m/(pdf|ps|svg)/ig ) {
 
@@ -4169,7 +4169,7 @@ else {
             return FALSE;
         }
 
-        #~ my $mime_type = Gnome2::VFS->get_mime_type_for_name( $uri->get_path );
+        #~ my $mime_type = get_mime_type( $uri );
         #~ unless ($mime_type && &fct_check_valid_mime_type($mime_type)){
         #~ #not a supported mime type
         #~ my $response = $sd->dlg_error_message(
